@@ -16,7 +16,7 @@ def main():
     R = st.sidebar.number_input("Radio del cilindro (R) [m]", 0.1, 5.0, 0.5, 0.1)
 
     st.sidebar.markdown("---")
-    st.sidebar.header("2. Condiciones")
+    st.sidebar.header("2. Condiciones físicas")
     h0 = st.sidebar.number_input("Altura inicial del fluido (h) [m]", 0.1, H_cilindro, 0.8, 0.05)
     omega = st.sidebar.slider("Velocidad angular (ω) [rad/s]", 0.0, 25.0, 5.0, 0.1)
     
