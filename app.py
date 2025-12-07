@@ -59,7 +59,7 @@ def main():
 
     # --- 5. GRÁFICA 3D ---
     with col2:
-        fig = plt.figure(figsize=(6, 4))
+        fig = plt.figure(figsize=(12, 10))
         ax = fig.add_subplot(111, projection='3d')
 
         # --- A. EL FLUIDO ---
@@ -113,7 +113,9 @@ def main():
         ax.set_ylabel('Y [m]')
         ax.set_zlabel('Altura Z [m]')
         ax.set_title(f"Visualización 3D del sistema")
-        
+
+        # Ajuste clave: Usar tight_layout para asegurar que las etiquetas quepan
+        plt.tight_layout()
         st.pyplot(fig)
 
 if __name__ == "__main__":
