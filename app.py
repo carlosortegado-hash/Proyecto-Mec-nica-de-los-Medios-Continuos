@@ -1,157 +1,94 @@
 import streamlit as st
 import numpy as np
-import sympy as sp
 import matplotlib.pyplot as plt
-import time
+from mpl_toolkits.mplot3d import Axes3D
 
-st.set_page_config(layout="wide", page_title="Simulación cinemática 3D — Medios Continuos")
+# Configuración
+st.set_page_config(page_title="Simulador Vórtice Forzado", layout="wide")
 
-st.title("Visualizador 3D (simplificado) de cinemática de un fluido")
+def main():
+    st.title("🌪️ Simulador de Líquido en Rotación")
+    st.markdown("""
+    Esta simulación visualiza los **Problemas 67-69** de tu boletín.
+    
+    Al girar un recipiente cilíndrico, la superficie libre adopta la forma de un **paraboloide de revolución** debido al equilibrio entre la gravedad y la fuerza centrífuga.
+    """)
 
-st.markdown("""
-### Este programa:
-- Acepta campos de velocidad **3D dependientes de x, y, z y t**
-- Calcula:  
-  • Gradiente de velocidades \\(\\nabla v\\)  
-  • Tensor de deformación unitaria \\(D\\)  
-  • Vorticidad \\(\\boldsymbol{\\omega}\\)  
-  • Aceleración material \\(a = \\partial_t v + (v\\cdot\\nabla)v\\)  
-- Muestra una **animación 2D en el plano z = 0** con malla deformándose  
-- Incluye **leyenda** indicando elementos de la gráfica
-""")
+    # --- CONTROLES LATERALES ---
+    st.sidebar.header("Parámetros del Experimento")
+    
+    # Sliders para jugar con las variables
+    omega = st.sidebar.slider("Velocidad Angular (rad/s)", 0.0, 15.0, 5.0, 0.1)
+    R = st.sidebar.slider("Radio del Recipiente (m)", 0.1, 1.0, 0.5, 0.1)
+    h0 = st.sidebar.slider("Nivel inicial de agua (m)", 0.1, 2.0, 1.0, 0.1)
+    
+    # Constante g
+    g = 9.81
 
-# -----------------------------------------------------
-# ENTRADAS DEL USUARIO
-# -----------------------------------------------------
-st.sidebar.header("Campo de velocidades")
+    # --- CÁLCULOS FÍSICOS (Sencillos) ---
+    # 1. Calculamos la altura en el centro (z_min) usando conservación de volumen
+    # El volumen inicial es pi*R^2*h0.
+    # El volumen del paraboloide se ajusta para que el promedio sea h0.
+    # Fórmula: z(r) = z_min + (w^2 * r^2) / (2g)
+    # Tras integrar, sabemos que la diferencia de altura entre pared y centro es: Delta_z = (w^2 R^2) / (2g)
+    # Y el nivel desciende en el centro la mitad de esa diferencia:
+    
+    delta_z = (omega**2 * R**2) / (2*g)
+    z_min = h0 - delta_z / 2
+    z_max = h0 + delta_z / 2
+    
+    # --- VISUALIZACIÓN ---
+    col1, col2 = st.columns([1, 2])
+    
+    with col1:
+        st.subheader("Datos Calculados")
+        st.metric("Altura en la pared (máx)", f"{z_max:.2f} m")
+        st.metric("Altura en el centro (mín)", f"{z_min:.2f} m")
+        st.metric("Diferencia de altura", f"{delta_z:.2f} m")
+        
+        if z_min < 0:
+            st.error("⚠️ ¡Cuidado! El fondo del recipiente quedaría seco (el vórtice toca el suelo).")
+        else:
+            st.success("El líquido cubre todo el fondo.")
 
-vx_str = st.sidebar.text_input("v_x(x,y,z,t) =", "y")
-vy_str = st.sidebar.text_input("v_y(x,y,z,t) =", "-x")
-vz_str = st.sidebar.text_input("v_z(x,y,z,t) =", "0")
+    with col2:
+        st.subheader("Vista 3D del Fluido")
+        
+        # Crear malla para el gráfico 3D
+        r = np.linspace(0, R, 50)
+        theta = np.linspace(0, 2*np.pi, 50)
+        r_grid, theta_grid = np.meshgrid(r, theta)
+        
+        # Coordenadas X, Y
+        X = r_grid * np.cos(theta_grid)
+        Y = r_grid * np.sin(theta_grid)
+        
+        # Coordenada Z (La ecuación del paraboloide)
+        Z = z_min + (omega**2 * r_grid**2) / (2*g)
+        
+        # Plot
+        fig = plt.figure(figsize=(10, 8))
+        ax = fig.add_subplot(111, projection='3d')
+        
+        # Superficie del agua
+        surf = ax.plot_surface(X, Y, Z, cmap='Blues', alpha=0.8, edgecolor='none')
+        
+        # Dibujar el recipiente (paredes transparentes) como referencia visual
+        z_cilindro = np.linspace(0, max(z_max, h0)*1.2, 10)
+        theta_cil = np.linspace(0, 2*np.pi, 30)
+        theta_grid_cil, z_grid_cil = np.meshgrid(theta_cil, z_cilindro)
+        x_cil = R * np.cos(theta_grid_cil)
+        y_cil = R * np.sin(theta_grid_cil)
+        ax.plot_surface(x_cil, y_cil, z_grid_cil, color='gray', alpha=0.1)
 
-xmin = st.sidebar.number_input("x min", -3.0)
-xmax = st.sidebar.number_input("x max", 3.0)
-ymin = st.sidebar.number_input("y min", -3.0)
-ymax = st.sidebar.number_input("y max", 3.0)
+        # Ajustes del gráfico
+        ax.set_zlim(0, max(z_max, h0)*1.5)
+        ax.set_xlabel('X (m)')
+        ax.set_ylabel('Y (m)')
+        ax.set_zlabel('Altura Z (m)')
+        ax.set_title(f"Superficie Libre ($\omega$ = {omega} rad/s)")
+        
+        st.pyplot(fig)
 
-t_sim = st.sidebar.number_input("Tiempo total de animación", 5.0)
-fps = st.sidebar.slider("FPS", 5, 30, 12)
-
-start_button = st.sidebar.button("Iniciar simulación")
-
-# -----------------------------------------------------
-# DEFINICIONES SIMBÓLICAS
-# -----------------------------------------------------
-x, y, z, t = sp.symbols("x y z t")
-
-vx_expr = sp.sympify(vx_str)
-vy_expr = sp.sympify(vy_str)
-vz_expr = sp.sympify(vz_str)
-
-# Lambdify para animación (en z = 0)
-vx = sp.lambdify((x, y, t), vx_expr.subs(z, 0), "numpy")
-vy = sp.lambdify((x, y, t), vy_expr.subs(z, 0), "numpy")
-
-# -----------------------------------------------------
-# GRADIENTE DE VELOCIDADES
-# -----------------------------------------------------
-Dv = sp.Matrix([
-    [sp.diff(vx_expr, x), sp.diff(vx_expr, y), sp.diff(vx_expr, z)],
-    [sp.diff(vy_expr, x), sp.diff(vy_expr, y), sp.diff(vy_expr, z)],
-    [sp.diff(vz_expr, x), sp.diff(vz_expr, y), sp.diff(vz_expr, z)]
-])
-
-# Tensor de deformación unitaria
-D_tensor = (Dv + Dv.T) / 2
-
-# Vorticidad
-omega = sp.Matrix([
-    sp.diff(vz_expr, y) - sp.diff(vy_expr, z),
-    sp.diff(vx_expr, z) - sp.diff(vz_expr, x),
-    sp.diff(vy_expr, x) - sp.diff(vx_expr, y)
-])
-
-# Aceleración material a = ∂v/∂t + (v·∇)v
-dv_dt = sp.Matrix([sp.diff(vx_expr, t),
-                   sp.diff(vy_expr, t),
-                   sp.diff(vz_expr, t)])
-
-adv = sp.Matrix([
-    vx_expr*sp.diff(vx_expr, x) + vy_expr*sp.diff(vx_expr, y) + vz_expr*sp.diff(vx_expr, z),
-    vx_expr*sp.diff(vy_expr, x) + vy_expr*sp.diff(vy_expr, y) + vz_expr*sp.diff(vy_expr, z),
-    vx_expr*sp.diff(vz_expr, x) + vy_expr*sp.diff(vz_expr, y) + vz_expr*sp.diff(vz_expr, z)
-])
-
-a = dv_dt + adv
-
-# -----------------------------------------------------
-# MOSTRAR RESULTADOS SIMBÓLICOS
-# -----------------------------------------------------
-col1, col2 = st.columns(2)
-
-with col1:
-    st.subheader("Gradiente de velocidades")
-    st.latex(sp.latex(Dv))
-
-    st.subheader("Tensor de deformación unitaria D")
-    st.latex(sp.latex(D_tensor))
-
-with col2:
-    st.subheader("Vorticidad ω")
-    st.latex(sp.latex(omega))
-
-    st.subheader("Aceleración material a")
-    st.latex(sp.latex(a))
-
-# -----------------------------------------------------
-# ANIMACIÓN 2D (z = 0)
-# -----------------------------------------------------
-if start_button:
-    st.markdown("---")
-    st.subheader("Animación en el plano z = 0")
-
-    anim_placeholder = st.empty()
-
-    # Grid para el campo vectorial
-    X, Y = np.meshgrid(np.linspace(xmin, xmax, 15),
-                       np.linspace(ymin, ymax, 15))
-
-    # Malla de partículas
-    gX, gY = np.meshgrid(np.linspace(xmin+0.5, xmax-0.5, 10),
-                         np.linspace(ymin+0.5, ymax-0.5, 10))
-    particles = np.vstack([gX.flatten(), gY.flatten()]).T
-
-    dt = 1/fps
-    steps = int(t_sim * fps)
-
-    for step in range(steps):
-        tt = step * dt
-
-        # Update particle positions (Euler explícito)
-        u = vx(particles[:,0], particles[:,1], tt)
-        v = vy(particles[:,0], particles[:,1], tt)
-
-        particles[:,0] += u * dt
-        particles[:,1] += v * dt
-
-        # FIGURA
-        fig, ax = plt.subplots(figsize=(6,6))
-
-        # Campo vectorial
-        ax.quiver(X, Y, vx(X,Y,tt), vy(X,Y,tt), color="blue", alpha=0.5, label="Campo de velocidades")
-
-        # Partículas
-        ax.scatter(particles[:,0], particles[:,1], color="red", s=12, label="Partículas fluidas")
-
-        # Límites
-        ax.set_xlim(xmin, xmax)
-        ax.set_ylim(ymin, ymax)
-        ax.set_aspect("equal")
-
-        # Leyenda
-        ax.legend(loc="upper right")
-
-        ax.set_title(f"Evolución de partículas en el plano z = 0  |  t = {tt:.2f} s")
-
-        anim_placeholder.pyplot(fig)
-        time.sleep(dt)
+if __name__ == "__main__":
+    main()
