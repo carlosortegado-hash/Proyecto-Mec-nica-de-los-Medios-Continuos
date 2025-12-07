@@ -59,7 +59,7 @@ def main():
 
     # --- 5. GRÁFICA 3D ---
     with col2:
-        fig = plt.figure(figsize=(10, 9))
+        fig = plt.figure(figsize=(15, 8))
         ax = fig.add_subplot(111, projection='3d')
 
         # --- A. EL FLUIDO ---
