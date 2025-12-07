@@ -7,17 +7,17 @@ from mpl_toolkits.mplot3d import Axes3D
 st.set_page_config(page_title="Simulador de Fluidos", layout="wide")
 
 def main():
-    st.title("🌪️ Superficie Libre en Rotación")
-    st.markdown("Simulación basada en la conservación de volumen para un recipiente cilíndrico.")
+    st.title("Superficie Libre en Rotación")
+    st.markdown("Simulación que calcula y representa el perfil parabólico de la superficie libre de un fluido contenido en un recipiente cilíndrico que rota a velocidad angular constante.")
 
     # --- 1. PARÁMETROS ---
-    st.sidebar.header("1. Geometría")
+    st.sidebar.header("1. Geometría del cilindro")
     H_cilindro = st.sidebar.number_input("Altura del cilindro (H) [m]", 0.1, 10.0, 1.5, 0.1)
     R = st.sidebar.number_input("Radio del cilindro (R) [m]", 0.1, 5.0, 0.5, 0.1)
 
     st.sidebar.markdown("---")
     st.sidebar.header("2. Condiciones")
-    h0 = st.sidebar.number_input("Altura inicial (h0) [m]", 0.1, H_cilindro, 0.8, 0.05)
+    h0 = st.sidebar.number_input("Altura inicial del fluido (h) [m]", 0.1, H_cilindro, 0.8, 0.05)
     omega = st.sidebar.slider("Velocidad angular (ω) [rad/s]", 0.0, 25.0, 5.0, 0.1)
     
     st.sidebar.markdown("---")
