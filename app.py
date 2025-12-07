@@ -4,95 +4,93 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 # Configuración de página
-st.set_page_config(page_title="Simulador Vórtice + Ascensor", layout="wide")
+st.set_page_config(page_title="Simulador Vórtice - Gravedad Variable", layout="wide")
 
 def main():
-    st.title("🌪️ Vórtice Forzado con Aceleración Vertical")
+    st.title("🌪️ Vórtice Forzado con Gravedad Variable")
     st.markdown("""
-    Este simulador utiliza la expresión analítica de $z_s(r)$ para comprobar si el fluido se derrama o toca el fondo 
-    bajo condiciones de rotación y aceleración vertical (Ej. Problema 69 del boletín).
+    Este simulador calcula la superficie libre de un fluido en rotación $z_s(r)$.
+    Puedes modificar la **Gravedad (g)** para simular condiciones en otros planetas 
+    o sistemas acelerados (gravedad efectiva).
     """)
 
     # --- 1. PARÁMETROS DE ENTRADA ---
-    st.sidebar.header("⚙️ Geometría y Condiciones")
+    st.sidebar.header("⚙️ Geometría del Recipiente")
     
     # Geometría del cilindro
     H_cilindro = st.sidebar.number_input("Altura total del cilindro (H) [m]", 0.5, 5.0, 1.5, 0.1)
     R = st.sidebar.number_input("Radio del cilindro (R) [m]", 0.1, 2.0, 0.5, 0.1)
     
     st.sidebar.markdown("---")
-    st.sidebar.header("💧 Fluido y Movimiento")
+    st.sidebar.header("💧 Condiciones Físicas")
     
-    # Estado inicial
+    # Estado inicial del fluido
     h0 = st.sidebar.slider("Nivel inicial de líquido (h0) [m]", 0.1, H_cilindro, H_cilindro*0.6, 0.05)
     
-    # Dinámica
+    # Variables Dinámicas
     omega = st.sidebar.slider("Velocidad Angular (ω) [rad/s]", 0.0, 20.0, 5.0, 0.1)
     
-    # Aceleración externa (Ascensor)
-    st.sidebar.markdown("### 🚀 Aceleración Externa")
-    st.sidebar.info("Si el ascensor SUBE acelerando, la gravedad aparente aumenta.")
-    a_ascensor = st.sidebar.number_input("Aceleración del ascensor (a_z) [m/s²]", -9.0, 20.0, 0.0, 0.5)
-    
-    # --- 2. CÁLCULOS FÍSICOS (La Expresión de Clase) ---
-    
-    g_tierra = 9.81
-    # Gravedad efectiva: g' = g + a (Principio de equivalencia)
-    g_eff = g_tierra + a_ascensor
-    
-    if g_eff <= 0:
-        st.error("⛔ ¡Error Físico! Si la aceleración hacia abajo es mayor que la gravedad, el agua flotaría libremente.")
-        return
+    # SELECCIÓN DIRECTA DE GRAVEDAD
+    st.sidebar.markdown("### 🪐 Gravedad")
+    g_input = st.sidebar.number_input("Aceleración de la gravedad (g) [m/s²]", 0.1, 50.0, 9.81, 0.1)
+    st.sidebar.caption("Ejemplos: Tierra=9.81, Luna=1.62, Marte=3.71")
 
-    # Ecuación de la altura de la superficie libre z_s(r)
-    # z_s(r) = (h0 - (omega^2 * R^2)/(4g)) + (omega^2 * r^2)/(2g)
-    # El primer término es z_min (altura en el centro)
+    # --- 2. CÁLCULOS FÍSICOS ---
     
-    termino_comun = (omega**2) / (2 * g_eff)
-    z_min = h0 - termino_comun * (R**2 / 2) # Esto es h0 - (w^2 R^2)/(4g)
-    z_max = z_min + termino_comun * (R**2)  # Esto es la altura en la pared r=R
+    # Usamos directamente el input de gravedad
+    g = g_input
     
-    # --- 3. COMPROBACIONES DE SEGURIDAD ---
+    # Ecuación de la altura de la superficie libre z_s(r) derivada en clase:
+    # z_s(r) = z_min + (omega^2 * r^2) / (2g)
+    # Por conservación de volumen, z_min se relaciona con h0:
+    
+    termino_comun = (omega**2) / (2 * g)
+    z_min = h0 - termino_comun * (R**2 / 2) 
+    z_max = z_min + termino_comun * (R**2)  
+    
+    # --- 3. DIAGNÓSTICO Y ALERTAS ---
     
     col_info, col_graf = st.columns([1, 2])
     
     with col_info:
-        st.subheader("📊 Resultados")
-        st.write(f"**Gravedad Efectiva ($g'$):** {g_eff:.2f} m/s²")
+        st.subheader("📊 Resultados Analíticos")
         
-        # Métricas
-        st.metric("Altura en el centro ($z_{min}$)", f"{z_min:.3f} m")
-        st.metric("Altura en la pared ($z_{max}$)", f"{z_max:.3f} m")
+        # Métricas principales
+        colA, colB = st.columns(2)
+        with colA:
+            st.metric("Altura Centro ($z_{min}$)", f"{z_min:.3f} m")
+        with colB:
+            st.metric("Altura Pared ($z_{max}$)", f"{z_max:.3f} m")
         
         st.markdown("---")
-        st.subheader("⚠️ Diagnóstico")
+        st.subheader("⚠️ Estado del Sistema")
         
         estado_ok = True
         
-        # Chequeo 1: ¿Toca el fondo?
+        # Alerta 1: Fondo seco
         if z_min < 0:
-            st.error("❌ **EL FONDO ESTÁ SECO**: El vórtice es tan fuerte que toca el suelo del recipiente.")
+            st.error("❌ **FONDO SECO**: El vórtice toca el suelo. La ecuación deja de ser válida en el centro seco.")
             estado_ok = False
         else:
-            st.success("✅ Fondo cubierto de agua.")
+            st.success("✅ Fondo cubierto.")
             
-        # Chequeo 2: ¿Se sale por arriba?
+        # Alerta 2: Derrame
         if z_max > H_cilindro:
-            st.error(f"❌ **DERRAME**: El agua rebasa la altura del cilindro ({H_cilindro} m).")
+            st.error(f"❌ **DERRAME**: El líquido rebasa la altura {H_cilindro} m.")
             estado_ok = False
         else:
-            st.success("✅ El agua no se derrama.")
+            st.success("✅ Sin derrame.")
             
         if estado_ok:
-            st.info("El sistema está en equilibrio seguro.")
+            st.info("El sistema está estable y contenido.")
 
-    # --- 4. VISUALIZACIÓN GRÁFICA ---
+    # --- 4. VISUALIZACIÓN 3D ---
     
     with col_graf:
         fig = plt.figure(figsize=(10, 8))
         ax = fig.add_subplot(111, projection='3d')
         
-        # Malla radial
+        # Generar malla cilíndrica
         r = np.linspace(0, R, 40)
         theta = np.linspace(0, 2*np.pi, 60)
         r_grid, theta_grid = np.meshgrid(r, theta)
@@ -100,38 +98,36 @@ def main():
         X = r_grid * np.cos(theta_grid)
         Y = r_grid * np.sin(theta_grid)
         
-        # Aplicamos la fórmula exacta Z_s(r)
-        # Z = z_min + (omega^2 * r^2) / (2g)
+        # Calcular alturas Z
         Z = z_min + termino_comun * (r_grid**2)
         
-        # Recortamos visualmente si se sale de los límites físicos (para que el dibujo sea realista)
-        # Lo que esté por debajo de 0 lo pintamos como 0, lo que esté por encima de H, como H
+        # Clip visual (para que el dibujo no se salga de la caja gráfica de forma fea)
         Z_visual = np.clip(Z, 0, H_cilindro) 
         
-        # Pintar superficie del agua
-        surf = ax.plot_surface(X, Y, Z_visual, cmap='winter', alpha=0.7, rstride=2, cstride=2)
+        # 1. Dibujar Fluido
+        surf = ax.plot_surface(X, Y, Z_visual, cmap='winter', alpha=0.7, rstride=2, cstride=2, antialiased=True)
         
-        # --- DIBUJAR EL CILINDRO (Referencia visual) ---
-        # Tapa superior (borde)
+        # 2. Dibujar Estructura del Cilindro (Visualización)
+        # Borde superior
         theta_line = np.linspace(0, 2*np.pi, 100)
         x_rim = R * np.cos(theta_line)
         y_rim = R * np.sin(theta_line)
         z_rim = np.full_like(theta_line, H_cilindro)
-        ax.plot(x_rim, y_rim, z_rim, color='black', linewidth=3, label='Borde Recipiente')
+        ax.plot(x_rim, y_rim, z_rim, color='black', linewidth=3, label='Borde')
         
-        # Paredes del cilindro (malla de alambre gris)
-        z_wall = np.linspace(0, H_cilindro, 10)
+        # Paredes transparentes
+        z_wall = np.linspace(0, H_cilindro, 2) # Solo base y tapa para aligerar
         theta_w, z_w = np.meshgrid(theta_line, z_wall)
         x_w = R * np.cos(theta_w)
         y_w = R * np.sin(theta_w)
-        ax.plot_surface(x_w, y_w, z_w, color='gray', alpha=0.1)
+        ax.plot_surface(x_w, y_w, z_w, color='gray', alpha=0.15)
 
-        # Configuración de ejes
-        ax.set_zlim(0, H_cilindro * 1.2)
+        # Ajustes de la cámara y ejes
+        ax.set_zlim(0, H_cilindro * 1.1)
         ax.set_xlabel('X [m]')
         ax.set_ylabel('Y [m]')
         ax.set_zlabel('Altura Z [m]')
-        ax.set_title(f"Superficie Libre ($a_z$ = {a_ascensor} m/s²)")
+        ax.set_title(f"Superficie Libre (g = {g} m/s²)")
         
         st.pyplot(fig)
 
