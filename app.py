@@ -15,7 +15,7 @@ def main():
     """)
 
     # --- 1. PARÁMETROS DE ENTRADA ---
-    st.sidebar.header("⚙️ Geometría del Recipiente")
+    st.sidebar.header("Geometría del Recipiente")
     
     # Geometría del cilindro
     H_cilindro = st.sidebar.number_input("Altura total del cilindro (H) [m]", 0.5, 5.0, 1.5, 0.1)
