@@ -45,17 +45,17 @@ def main():
         st.metric("Altura máxima (Pared)", f"{z_max:.3f} m")
 
         st.markdown("---")
-        st.subheader("⚠️ Comprobación")
+        st.subheader("Comprobación")
         
         estado_ok = True
         if z_min < 0:
             st.error("❌ **FONDO SECO**: El fluido toca el fondo (z < 0).")
             estado_ok = False
         if z_max > H_cilindro:
-            st.error(f"❌ **DERRAME**: El fluido rebosa la altura {H_cilindro} m.")
+            st.error(f"**DERRAME**: El fluido rebosa del recipiente")
             estado_ok = False   
         if estado_ok:
-            st.success("✅ Sistema en equilibrio dentro del recipiente.")
+            st.success("Sistema en equilibrio dentro del recipiente.")
 
     # --- 5. GRÁFICA 3D ---
     with col2:
