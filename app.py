@@ -49,7 +49,7 @@ def main():
         
         estado_ok = True
         if z_min < 0:
-            st.error("❌ **FONDO SECO**: El fluido toca el fondo (z < 0).")
+            st.error("**FONDO SECO**: El fluido toca el fondo (z < 0).")
             estado_ok = False
         if z_max > H_cilindro:
             st.error(f"**DERRAME**: El fluido rebosa del recipiente")
