@@ -21,12 +21,12 @@ def main():
     omega = st.sidebar.slider("Velocidad angular (ω) [rad/s]", 0.0, 25.0, 5.0, 0.1)
     
     st.sidebar.markdown("---")
-    st.sidebar.header("3. Gravedad")
-    g = st.sidebar.number_input("Gravedad (g) [m/s²]", 0.1, 30.0, 9.81, 0.1)
+    st.sidebar.header("3. Gravedad efectiva")
+    g = st.sidebar.number_input("Gravedad efectiva (g) [m/s²]", 0.1, 30.0, 9.81, 0.1)
 
     # --- 2. FÓRMULA ---
-    st.markdown("### 📐 Expresión utilizada:")
-    st.latex(r"z(r) = h_0 - \frac{\omega^2 R^2}{4g} + \frac{\omega^2 r^2}{2g}")
+    st.markdown("Expresión utilizada:")
+    st.latex(r"z(r) = h - \frac{\omega^2 R^2}{4g} + \frac{\omega^2 r^2}{2g}")
 
     # --- 3. CÁLCULOS ---
     
@@ -40,8 +40,7 @@ def main():
     col1, col2 = st.columns([1, 2])
 
     with col1:
-        st.subheader("📊 Datos Calculados")
-        st.write(f"**Altura inicial ($h_0$):** {h0} m")
+        st.subheader("Datos Calculados")
         st.metric("Altura mínima (Centro)", f"{z_min:.3f} m")
         st.metric("Altura máxima (Pared)", f"{z_max:.3f} m")
 
