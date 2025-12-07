@@ -2,145 +2,191 @@ import streamlit as st
 import sympy as sp
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
 from scipy.integrate import odeint
-import matplotlib.animation as animation
 
 # Configuración de la página
-st.set_page_config(page_title="Simulador de Fluidos", layout="wide")
+st.set_page_config(page_title="Calculadora de Fluidos 2D", layout="wide")
 
 def main():
-    st.title("🌊 Simulador de Mecánica de Fluidos")
-    st.markdown("Introduce las componentes del vector velocidad $\\vec{V} = (u, v, w)$.")
+    st.title("🌊 Calculadora de Fluidos 2D (Analítica y Gráfica)")
+    st.markdown("""
+    Introduce las velocidades $u$ y $v$. Pueden depender de **x**, **y**, y el tiempo **t**.
+    El programa intentará buscar la ecuación matemática y generará la gráfica.
+    """)
 
-    # --- BARRA LATERAL (INPUTS) ---
-    st.sidebar.header("Configuración del Campo")
-    u_str = st.sidebar.text_input("Velocidad en X (u):", "2*x")
-    v_str = st.sidebar.text_input("Velocidad en Y (v)", "-y")
-    w_str = st.sidebar.text_input("Velocidad en Z (w)", "0.1*t")
+    # --- 1. CONFIGURACIÓN LATERAL ---
+    st.sidebar.header("1. Definir Campo de Velocidad")
+    u_input = st.sidebar.text_input("Velocidad en X (u):", "1 + 0.5*t")
+    v_input = st.sidebar.text_input("Velocidad en Y (v):", "x")
     
-    # Variables simbólicas
-    x, y, z, t = sp.symbols('x y z t')
+    st.sidebar.header("2. Parámetros de Simulación")
+    t_val = st.sidebar.number_input("Instante de tiempo (t) para visualizar:", value=2.0, step=0.1)
+    
+    st.sidebar.markdown("---")
+    st.sidebar.write("Condiciones iniciales (para Trayectoria/Humo):")
+    x0 = st.sidebar.number_input("Posición X0:", value=0.0)
+    y0 = st.sidebar.number_input("Posición Y0:", value=0.0)
 
-    if st.sidebar.button("Analizar y Simular"):
-        try:
-            u = sp.sympify(u_str)
-            v = sp.sympify(v_str)
-            w = sp.sympify(w_str)
-        except:
-            st.error("Error en las fórmulas. Revisa la sintaxis.")
-            return
+    # --- 2. PROCESAMIENTO MATEMÁTICO ---
+    # Definimos símbolos
+    x, y, t = sp.symbols('x y t')
+    
+    # Convertimos texto a funciones sympy
+    try:
+        u_sym = sp.sympify(u_input)
+        v_sym = sp.sympify(v_input)
+    except:
+        st.error("Error en las fórmulas. Usa sintaxis Python: 2*x, sin(t), etc.")
+        return
 
-        # --- ANÁLISIS TEÓRICO ---
-        col1, col2 = st.columns(2)
+    # Funciones numéricas para las gráficas (lambdify)
+    func_u = sp.lambdify((t, x, y), u_sym, modules=['numpy'])
+    func_v = sp.lambdify((t, x, y), v_sym, modules=['numpy'])
+
+    # Función auxiliar para obtener velocidad numérica
+    def get_vel(time, pos):
+        px, py = pos
+        # Arrays de numpy protection
+        return [float(func_u(time, px, py)), float(func_v(time, px, py))]
+
+    # --- 3. MOSTRAR RESULTADOS ---
+    
+    st.subheader(f"Analizando el instante t = {t_val}")
+
+    # Pestañas para organizar la info
+    tab1, tab2, tab3 = st.tabs(["Líneas de Corriente", "Trayectoria", "Línea de Humo"])
+
+    # ==========================================
+    # PESTAÑA 1: LÍNEAS DE CORRIENTE (Streamlines)
+    # Ecuación: dy/dx = v/u (con t fijo)
+    # ==========================================
+    with tab1:
+        col_math, col_graph = st.columns([1, 2])
         
-        with col1:
-            st.subheader("📋 Propiedades del Flujo")
+        with col_math:
+            st.markdown("### 📐 Ecuación")
+            st.info("Se obtiene resolviendo: $\\frac{dy}{dx} = \\frac{v}{u}$ (t fijo)")
             
-            # 1. Estacionario
-            derivadas_t = [sp.diff(c, t) for c in [u,v,w]]
-            if all(d == 0 for d in derivadas_t):
-                st.success("**Estacionario**: No depende del tiempo.")
-            else:
-                st.warning("**No Estacionario**: Depende del tiempo.")
+            # Intentar resolver simbólicamente
+            try:
+                # Sustituimos el tiempo por el valor fijo elegido
+                u_fixed = u_sym.subs(t, t_val)
+                v_fixed = v_sym.subs(t, t_val)
                 
-            # 2. Dimensionalidad
-            vars_p = set().union(*[c.free_symbols for c in [u,v,w]])
-            coords = {x, y, z}
-            dims = len(coords.intersection(vars_p))
-            if w==0 and z not in vars_p: dims = 2
-            st.info(f"**Dimensionalidad**: Flujo {dims}D")
-
-        with col2:
-            st.subheader("🧮 Operadores Diferenciales")
-            
-            # 3. Divergencia
-            div = sp.simplify(sp.diff(u, x) + sp.diff(v, y) + sp.diff(w, z))
-            st.write("Divergencia ($\\nabla \\cdot \\vec{V}$):")
-            st.latex(sp.latex(div))
-            if div == 0: st.caption("👉 Incompresible (Líquido)")
-            else: st.caption("👉 Compresible (Gas)")
-            
-            # 4. Rotacional
-            rot_x = sp.simplify(sp.diff(w, y) - sp.diff(v, z))
-            rot_y = sp.simplify(sp.diff(u, z) - sp.diff(w, x))
-            rot_z = sp.simplify(sp.diff(v, x) - sp.diff(u, y))
-            st.write("Rotacional ($\\nabla \\times \\vec{V}$):")
-            st.latex(f"({sp.latex(rot_x)})\\hat{{i}} + ({sp.latex(rot_y)})\\hat{{j}} + ({sp.latex(rot_z)})\\hat{{k}}")
-
-        # --- SIMULACIÓN VISUAL ---
-        st.markdown("---")
-        st.subheader("🖥️ Simulación Visual")
-        tipo = st.radio("Selecciona visualización:", ["Líneas de Corriente (Streamlines)", "Trayectorias (Pathlines)"], horizontal=True)
-
-        with st.spinner("Generando animación (esto puede tardar unos segundos)..."):
-            fig = plt.figure(figsize=(8, 6))
-            ax = fig.add_subplot(111, projection='3d')
-            ax.set_xlim(-5, 5); ax.set_ylim(-5, 5); ax.set_zlim(-5, 5)
-            ax.set_xlabel('X'); ax.set_ylabel('Y'); ax.set_zlabel('Z')
-
-            # Funciones numéricas
-            f_u = sp.lambdify((t, x, y, z), u, 'numpy')
-            f_v = sp.lambdify((t, x, y, z), v, 'numpy')
-            f_w = sp.lambdify((t, x, y, z), w, 'numpy')
-
-            def get_vel(ti, pos):
-                px, py, pz = pos
-                try: 
-                    # Manejo seguro de floats y arrays
-                    vx = float(f_u(ti, px, py, pz))
-                    vy = float(f_v(ti, px, py, pz))
-                    vz = float(f_w(ti, px, py, pz))
-                except: 
-                    return np.array([0.0, 0.0, 0.0])
-                return np.array([vx, vy, vz])
-
-            if "Corriente" in tipo:
-                # Streamlines
-                semillas = [[i, j, 0] for i in range(-3, 4, 3) for j in range(-3, 4, 3)]
-                lines = [ax.plot([], [], [], color='blue', alpha=0.6)[0] for _ in semillas]
+                equation = sp.Eq(sp.Derivative(y, x), v_fixed / u_fixed)
+                st.latex(sp.latex(equation))
                 
-                def update_stream(frame):
-                    time_fix = frame * 0.1
-                    ax.set_title(f"Líneas de Corriente (t={time_fix:.1f})")
-                    for i, seed in enumerate(semillas):
-                        camino = [seed]
-                        curr = np.array(seed, dtype=float)
-                        for _ in range(20): # Longitud de la linea
-                            v = get_vel(time_fix, curr)
-                            curr = curr + v * 0.2
-                            camino.append(curr)
-                        dat = np.array(camino)
-                        lines[i].set_data(dat[:,0], dat[:,1])
-                        lines[i].set_3d_properties(dat[:,2])
-                    return lines
+                st.write("Solución general (aproximada):")
+                sol = sp.dsolve(sp.Function('y')(x).diff(x) - v_fixed/u_fixed, sp.Function('y')(x))
+                st.latex(sp.latex(sol))
+            except:
+                st.warning("La ecuación es demasiado compleja para mostrar la solución analítica automática.")
 
-                ani = FuncAnimation(fig, update_stream, frames=30, interval=100)
+        with col_graph:
+            st.markdown("### 📈 Gráfica del Campo")
+            fig, ax = plt.subplots()
             
-            else:
-                # Pathlines
-                puntos = [[1,1,0], [-1,1,0], [1,-1,0], [-1,-1,0]]
-                lines = [ax.plot([], [], [], 'o-', markersize=4)[0] for _ in puntos]
-                paths = [[np.array(p)] for p in puntos]
-                
-                def update_path(frame):
-                    dt = 0.1
-                    ti = frame * dt
-                    ax.set_title(f"Trayectorias (t={ti:.1f})")
-                    for i, line in enumerate(lines):
-                        last = paths[i][-1]
-                        v = get_vel(ti, last)
-                        new_p = last + v * dt
-                        paths[i].append(new_p)
-                        dat = np.array(paths[i])
-                        line.set_data(dat[:,0], dat[:,1])
-                        line.set_3d_properties(dat[:,2])
-                    return lines
+            # Grid para streamplot
+            Y, X = np.mgrid[-5:5:100j, -5:5:100j]
+            # Calculamos U y V en toda la malla para el tiempo t_val
+            U_num = func_u(t_val, X, Y)
+            V_num = func_v(t_val, X, Y)
+            
+            # Streamplot pinta las líneas de corriente automáticamente
+            strm = ax.streamplot(X, Y, U_num, V_num, color=U_num, linewidth=1, cmap='autumn')
+            ax.set_title(f"Líneas de Corriente en t={t_val}")
+            ax.set_xlabel("X"); ax.set_ylabel("Y")
+            ax.set_xlim(-5,5); ax.set_ylim(-5,5)
+            fig.colorbar(strm.lines)
+            st.pyplot(fig)
 
-                ani = FuncAnimation(fig, update_path, frames=40, interval=100)
+    # ==========================================
+    # PESTAÑA 2: TRAYECTORIA (Pathlines)
+    # Ecuación: dx/dt = u, dy/dt = v
+    # ==========================================
+    with tab2:
+        col_math, col_graph = st.columns([1, 2])
+        
+        with col_math:
+            st.markdown("### 📐 Ecuación")
+            st.info("Se obtiene integrando: $\\frac{d\\vec{r}}{dt} = \\vec{V}(\\vec{r}, t)$")
+            st.write("Sistema de Ecuaciones Diferenciales:")
+            st.latex(f"\\frac{{dx}}{{dt}} = {sp.latex(u_sym)}")
+            st.latex(f"\\frac{{dy}}{{dt}} = {sp.latex(v_sym)}")
+            
+        with col_graph:
+            st.markdown("### 📈 Gráfica de la Partícula")
+            
+            # Resolver numéricamente la trayectoria desde t=0 hasta t_val
+            t_span = np.linspace(0, t_val, 100)
+            
+            def model_trayectoria(pos, time_var):
+                return get_vel(time_var, pos)
+            
+            # Integramos
+            path = odeint(model_trayectoria, [x0, y0], t_span)
+            
+            fig2, ax2 = plt.subplots()
+            ax2.plot(path[:,0], path[:,1], 'b-', label='Recorrido histórico')
+            ax2.plot(path[-1,0], path[-1,1], 'ro', label=f'Posición actual (t={t_val})')
+            ax2.plot(x0, y0, 'go', label='Inicio (t=0)')
+            
+            ax2.set_xlim(-5, 5); ax2.set_ylim(-5, 5)
+            ax2.grid(True)
+            ax2.legend()
+            ax2.set_title("Trayectoria de una partícula")
+            st.pyplot(fig2)
 
-            # Renderizar animación en Streamlit usando JSHTML
-            st.components.v1.html(ani.to_jshtml(), height=600)
+    # ==========================================
+    # PESTAÑA 3: LÍNEA DE HUMO (Streaklines)
+    # Definición: Lugar geométrico de partículas inyectadas
+    # ==========================================
+    with tab3:
+        col_math, col_graph = st.columns([1, 2])
+        
+        with col_math:
+            st.markdown("### 📐 Explicación")
+            st.info("Línea formada por todas las partículas que han pasado por el punto de inyección $(X_0, Y_0)$ en el pasado.")
+            st.markdown("""
+            Matemáticamente, si la posición de una partícula es $\\vec{r}(t, \\tau)$, donde $\\tau$ es el momento en que se inyectó:
+            La línea de humo en el instante $t$ es el conjunto de puntos:
+            """)
+            st.latex(f"\\vec{{r}}_{{humo}} = \\vec{{r}}(t, \\tau) \\quad \\text{{para }} 0 \\le \\tau \\le t")
+            
+        with col_graph:
+            st.markdown("### 📈 Gráfica de Humo")
+            
+            # Para dibujar la línea de humo en el instante t_val:
+            # Tenemos que resolver muchas trayectorias.
+            # Cada punto de la línea de humo es una partícula que salió en un tiempo tau distinto.
+            
+            taus = np.linspace(0, t_val, 40) # 40 partículas inyectadas en distintos momentos
+            humo_x = []
+            humo_y = []
+            
+            for tau in taus:
+                # Integramos esta partícula desde SU tiempo de nacimiento (tau) hasta AHORA (t_val)
+                if t_val > tau:
+                    t_vida = np.linspace(tau, t_val, 20)
+                    trayectoria_p = odeint(model_trayectoria, [x0, y0], t_vida)
+                    # Nos quedamos solo con la posición final (donde está ahora)
+                    pos_final = trayectoria_p[-1]
+                    humo_x.append(pos_final[0])
+                    humo_y.append(pos_final[1])
+                else:
+                    humo_x.append(x0)
+                    humo_y.append(y0)
+
+            fig3, ax3 = plt.subplots()
+            # Dibujamos los puntos conectados
+            ax3.plot(humo_x, humo_y, 'o-', color='purple', markersize=4, alpha=0.7)
+            ax3.plot(x0, y0, 'r^', label='Inyector', markersize=10)
+            
+            ax3.set_xlim(-5, 5); ax3.set_ylim(-5, 5)
+            ax3.grid(True)
+            ax3.set_title(f"Línea de Humo en t={t_val}")
+            ax3.legend()
+            st.pyplot(fig3)
 
 if __name__ == "__main__":
     main()
