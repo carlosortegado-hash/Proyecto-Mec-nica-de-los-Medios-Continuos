@@ -59,7 +59,7 @@ def main():
 
     # --- 5. GRÁFICA 3D ---
     with col2:
-        fig = plt.figure(figsize=(15, 8))
+        fig = plt.figure(figsize=(10, 8))
         ax = fig.add_subplot(111, projection='3d')
 
         # --- A. EL FLUIDO ---
@@ -112,7 +112,7 @@ def main():
         ax.set_xlabel('X [m]')
         ax.set_ylabel('Y [m]')
         ax.set_zlabel('Altura Z [m]')
-        ax.set_title(f"Visualización 3D (g={g})")
+        ax.set_title(f"Visualización 3D del sistema")
         
         st.pyplot(fig)
 
